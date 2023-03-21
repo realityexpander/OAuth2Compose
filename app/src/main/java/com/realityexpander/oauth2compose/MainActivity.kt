@@ -75,6 +75,9 @@ import org.json.JSONObject
 // For Google Sign In
 // In the Google Console, you only need to have a `Web Application` Client ID (NOT `Android`!!!)
 
+// Github dashboard:
+// https://github.com/settings/applications/2144082
+
 // Starter &  reference code:
 // https://velmurugan-murugesan.medium.com/appauth-android-velmm-com-d52a4980a668
 // https://github.com/LinusMuema/Clowning/blob/oauth2/presentation/src/main/AndroidManifest.xml
