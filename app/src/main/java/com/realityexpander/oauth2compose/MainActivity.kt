@@ -323,7 +323,7 @@ fun LoginOAuth2() {
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text(text = "$buttonLoginGoogleSignInLabel with Google")
+            Text(text = "$buttonLoginGoogleSignInLabel with GoogleSignIn Client")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -345,7 +345,7 @@ fun LoginOAuth2() {
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text(text = "$buttonLoginOpenIdAppAuthLabel with OpenId AppAuth")
+            Text(text = "$buttonLoginOpenIdAppAuthLabel with OpenId AppAuth Library")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
