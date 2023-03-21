@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
 
-        <!-- THIS IS REQUIRED ONLY FOR THE OpenID AppAuth for OAuth2 AUTHENTICATION -->
+        <!-- THIS IS ACTIVITY DEFINITION IS REQUIRED ONLY FOR THE OpenID AppAuth AUTHENTICATION -->
         <!-- note: it is not needed for the GoogleSignIn API -->
         <activity
                 android:name="net.openid.appauth.RedirectUriReceiverActivity"
