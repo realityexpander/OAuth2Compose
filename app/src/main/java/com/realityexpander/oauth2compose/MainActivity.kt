@@ -83,6 +83,7 @@ import org.json.JSONObject
 // https://github.com/LinusMuema/Clowning/blob/oauth2/presentation/src/main/AndroidManifest.xml
 // https://developer.android.com/training/id-auth/authenticate?authuser=2
 // https://stackoverflow.com/questions/55666987/how-to-implement-oauth2-authorization-on-android
+// https://www.youtube.com/watch?v=2m6rbQk0OcE // for github
 
 class MainActivity : ComponentActivity() {
 
