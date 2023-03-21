@@ -60,11 +60,12 @@ import net.openid.appauth.AuthorizationService
 import net.openid.appauth.AuthorizationServiceConfiguration
 import net.openid.appauth.ClientSecretBasic
 import net.openid.appauth.ResponseTypeValues
-import net.openid.appauth.TokenRequest
 import net.openid.appauth.TokenResponse
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okio.IOException
 import org.json.JSONObject
+
 
 // For OpenID AppAuth
 // Important: Needs to have SHA1 signature set in Google Console for the Android app
@@ -449,7 +450,13 @@ fun LoginOAuth2() {
                     updateUIForOpenIdAppAuth(null, null, null, null)
                     buttonLoginGoogleOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
-                    return@Button
+//                    return@Button
+
+                    scope.launch {
+                        signOutGoogleWithoutRedirect(
+                            openIdAppAuthStateManager.current.accessToken ?: return@launch
+                        )
+                    }
                 } else {
                     signInGoogleWithOpenIdAuthApp(openIdAppAuthService, startForResult_Google_OpenIdAppAuth)
                 }
@@ -471,6 +478,14 @@ fun LoginOAuth2() {
                     updateUIForOpenIdAppAuth(null, null, null, null)
                     buttonLoginGithubOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
+
+                    // Doesnt work yet
+                    scope.launch {
+                        signOutGithubWithoutRedirect(
+                            BuildConfig.GITHUB_CLIENT_ID,
+                            openIdAppAuthStateManager.current.accessToken ?: return@launch
+                        )
+                    }
                     return@Button
                 } else {
                     signInGithubWithOpenIdAuthApp(openIdAppAuthService, startForResult_Github_OpenIdAppAuth)
@@ -537,8 +552,8 @@ fun signInGoogleWithOpenIdAuthApp(
     startForResult: ActivityResultLauncher<Intent>
 ) {
     val serviceConfig = AuthorizationServiceConfiguration(
-        Uri.parse("https://accounts.google.com/o/oauth2/v2/auth"),
-        Uri.parse("https://oauth2.googleapis.com/token")
+        /* authorizationEndpoint = */ Uri.parse("https://accounts.google.com/o/oauth2/v2/auth"),
+        /* tokenEndpoint = */ Uri.parse("https://oauth2.googleapis.com/token")
     )
 
     // GOOGLE_CLIENT_ID  // IMPORTANT! MUST BE `Android` Google Client ID
@@ -564,8 +579,8 @@ fun signInGithubWithOpenIdAuthApp(
     startForResult: ActivityResultLauncher<Intent>
 ) {
     val serviceConfig = AuthorizationServiceConfiguration(
-        Uri.parse("https://github.com/login/oauth/authorize"),
-        Uri.parse("https://github.com/login/oauth/access_token")
+        /* authorizationEndpoint = */ Uri.parse("https://github.com/login/oauth/authorize"),
+        /* tokenEndpoint = */ Uri.parse("https://github.com/login/oauth/access_token")
     )
 
     // GITHUB_CLIENT_SECRET
@@ -577,6 +592,11 @@ fun signInGithubWithOpenIdAuthApp(
         clientId,
         ResponseTypeValues.CODE,
         redirectUri
+    )
+    builder.setAdditionalParameters(mapOf("max_age" to "0"))
+    builder.setPrompt(AuthorizationRequest.Prompt.LOGIN +" "+
+            AuthorizationRequest.Prompt.CONSENT +" "+
+            AuthorizationRequest.Prompt.SELECT_ACCOUNT
     )
     builder.setScopes("user repo")
     val authRequest = builder.build()
@@ -663,18 +683,63 @@ suspend fun getGitHubProfileInfo(
     }
 }
 
-data class GithubUserDto(
-    val id: Int,
-    val avatar_url: String,
-    val followers: Int,
-    val following: Int,
-    val login: String,
-    val owned_private_repos: Int,
-    val private_gists: Int,
-    val public_gists: Int,
-    val public_repos: Int,
-    val total_private_repos: Int,
-)
+const val URL_LOGOUT = "https://accounts.google.com/o/oauth2/revoke?token="
+suspend fun signOutGoogleWithoutRedirect(authStateIdToken: String) {
+    withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url(URL_LOGOUT + authStateIdToken)
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                println("response: ${response.body}, ${response.message}")
+            } else {
+                println("response error: ${response}")
+            }
+        } catch (e: IOException) {
+            println("error: ${e.localizedMessage}")
+        }
+    }
+
+    // Note: Normal servers that have logout endpoints:
+    //    val serviceConfig = AuthorizationServiceConfiguration(
+    //        Uri.parse("https://github.com/login/oauth/authorize"),
+    //        Uri.parse("https://github.com/login/oauth/access_token")
+    //    )
+    //
+    //    val endSessionRequest =
+    //        EndSessionRequest.Builder(serviceConfig)
+    //            .setIdTokenHint(openIdAppAuthStateManager.current.accessToken)
+    //            .setPostLogoutRedirectUri(Uri.parse("com.realityexpander.oauth2compose:/logout"))
+    //            .build()
+    //    val intent = openIdAppAuthService.getEndSessionRequestIntent(endSessionRequest)
+    //    launchIntent(context, intent)
+}
+
+suspend fun signOutGithubWithoutRedirect(clientId: String, accessToken: String) {
+    withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("https://api.github.com/applications/$clientId/tokens/$accessToken")
+            .addHeader("Authorization", "token $accessToken")
+            .addHeader("Accept", "application/vnd.github.v3+json")
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+            if(response.isSuccessful) {
+                println("response: ${response.body}, ${response.message}")
+            } else {
+                println("response error: ${response}")
+            }
+        } catch (e: IOException) {
+            println("error: ${e.localizedMessage}")
+        }
+    }
+}
+
 
 
 
