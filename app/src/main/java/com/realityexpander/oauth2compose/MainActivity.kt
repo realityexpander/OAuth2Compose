@@ -64,7 +64,7 @@ import okhttp3.Request
 import org.json.JSONObject
 
 // For OpenID AppAuth
-// Important: Needs to have signature set in google console for the Android app
+// Important: Needs to have SHA1 signature set in Google Console for the Android app
 // https://console.cloud.google.com/apis/credentials/
 // Generate SHA-1 on keystore & create `OAuth Client ID` for the App Package
 // keytool -keystore OAuth2Compose.keystore -list -v
@@ -256,9 +256,8 @@ fun LoginOAuth2() {
 
                     Log.d("accessToken", tokenResponse.accessToken.toString())
                     addStatusMessage(
-                        "startForResult_OpenIdAppAuth tokenResponse.accessToken:" + (tokenResponse.accessToken?.take(
-                            20
-                        ).toString())
+                        "startForResult_OpenIdAppAuth tokenResponse.accessToken:" +
+                                (tokenResponse.accessToken?.take(20).toString())
                     )
 
                     tokenResponse.accessToken?.let { token ->
@@ -303,7 +302,8 @@ fun LoginOAuth2() {
                     "googleSignInStatus error:" + (data.extras?.get("googleSignInStatus")
                         ?.toString() ?: "null")
                 )
-                // If you get DEVELOPER_ERROR, it means you arent using a WEB client ID from the GCP console
+                // If you get DEVELOPER_ERROR, it means you ARE NOT using a `WEB Client ID` from the GCP console,
+                // or the credential is malformed in some other way.
             }
 
             if (result.resultCode == Activity.RESULT_OK) {
@@ -355,23 +355,7 @@ fun LoginOAuth2() {
         Button(
             onClick = {
                 if (buttonLoginOpenIdAppAuthLabel == "Logout") {
-//                    openIdAppAuthService.performEndSessionRequest(
-//                        EndSessionRequest.Builder(
-//                            AuthorizationServiceConfiguration(
-//                                Uri.parse("https://accounts.google.com/o/oauth2/v2/auth"),
-//                                Uri.parse("https://www.googleapis.com/oauth2/v4/token")
-//                            )
-//                        )
-//                            .setPostLogoutRedirectUri(null)
-//                            .build(),
-//                        PendingIntent.getActivity(
-//                            context,
-//                            0,
-//                            Intent(context, MainActivity::class.java),
-//                            RESULT_OK
-//                        )
-//                    )
-                    openIdAppAuthStateManager?.replace(AuthState())
+                    openIdAppAuthStateManager?.replace(AuthState()) // performs logout
                     updateUIForOpenIdAppAuth(null, null, null, null)
                     buttonLoginOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
@@ -427,11 +411,11 @@ fun LoginOAuth2() {
 
 private fun getGoogleSignInClient(context: Context): GoogleSignInClient {
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        //GOOGLE_CLIENT_ID // IMPORTANT! MUST be `Web Application` Google Client ID
+        // GOOGLE_CLIENT_ID
+        // IMPORTANT! MUST be `Web Application` Google Client ID from the Google Cloud Console (APIs & Services)
         .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID_WEB_APPLICATION)
-//        .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID_ANDROID)
         .requestEmail()
-//        .requestId()
+        .requestId()
         .requestProfile()
         .build()
     return GoogleSignIn.getClient(context, gso)
@@ -495,7 +479,7 @@ suspend fun getProfileInfo(
             val locale = userInfo.optString("locale", null) // en
 
             // For some reason, the `id` is not retained for next app launch log-in using AppAuth
-            // Therefore, if using AppAuth, the `id` should the saved in App shared preferences.
+            // Therefore, if using OpenId AppAuth, the `id` should the saved in App shared preferences.
 
             onSuccess(imageUrl, fullName, email, id)
         } catch (exception: Exception) {
