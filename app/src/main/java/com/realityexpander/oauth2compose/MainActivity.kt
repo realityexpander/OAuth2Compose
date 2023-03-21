@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -72,13 +71,13 @@ import org.json.JSONObject
 // For Google Sign In
 // In the Google Console, you only need to have a `Web Application` Client ID (NOT `Android`!!!)
 
-const val RESULT_CODE_AUTH = 100
+// Starter &  reference code:
+// https://velmurugan-murugesan.medium.com/appauth-android-velmm-com-d52a4980a668
+// https://github.com/LinusMuema/Clowning/blob/oauth2/presentation/src/main/AndroidManifest.xml
+// https://developer.android.com/training/id-auth/authenticate?authuser=2
+// https://stackoverflow.com/questions/55666987/how-to-implement-oauth2-authorization-on-android
 
 class MainActivity : ComponentActivity() {
-
-
-//    lateinit var authService: AuthorizationService
-//    lateinit var stateManager: AuthStateManager
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,34 +89,13 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    //Greeting("Android")
                     LoginOAuth2()
                 }
             }
         }
     }
-
-
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    OAuth2ComposeTheme {
-        Greeting("Android")
-    }
-}
-
-
-@RequiresApi(Build.VERSION_CODES.TIRAMISU) // for getParcelable
 @Composable
 fun LoginOAuth2() {
     val context = LocalContext.current
@@ -229,7 +207,6 @@ fun LoginOAuth2() {
                 val exception = AuthorizationException.fromIntent(result.data)
 
                 response ?: run {
-                    // authorization failed, check ex for more details
                     Log.d("response", "null")
                     addStatusMessage("startForResult_OpenIdAppAuth response: ${exception?.message}")
                     return@rememberLauncherForActivityResult
@@ -242,7 +219,6 @@ fun LoginOAuth2() {
                 ) { tokenResponse, authorizationException ->
 
                     tokenResponse ?: run {
-                        // authorization failed, check ex for more details
                         Log.d("resp", "null")
                         addStatusMessage("startForResult_OpenIdAppAuth authorizationException.ex: " + authorizationException?.message)
                         return@performTokenRequest
@@ -282,9 +258,9 @@ fun LoginOAuth2() {
                             // authorization completed
                             Log.d("res", tokenResponse.accessToken ?: "Null Token")
                             addStatusMessage(
-                                "startForResult_OpenIdAppAuth authorization_completed tokenResponse.accessToken:" + (tokenResponse.accessToken?.take(
-                                    20
-                                ).toString())
+                                "startForResult_OpenIdAppAuth authorization_completed " +
+                                        "tokenResponse.accessToken:" +
+                                        (tokenResponse.accessToken?.take(20).toString())
                             )
                         }
                     }
@@ -361,7 +337,7 @@ fun LoginOAuth2() {
                     addStatusMessage("Logged out")
                     return@Button
                 } else {
-                    signInWithOpenIdAuth(openIdAppAuthService, startForResult_OpenIdAppAuth)
+                    signInWithOpenIdAuthApp(openIdAppAuthService, startForResult_OpenIdAppAuth)
                 }
             },
             modifier = Modifier
@@ -372,7 +348,7 @@ fun LoginOAuth2() {
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // • PHOTO IMAGE
+        // • PHOTO IMAGE & ACCOUNT INFO
         userImageUrl?.let {
             SubcomposeAsyncImage(
                 model = userImageUrl,
@@ -390,15 +366,12 @@ fun LoginOAuth2() {
                     .fillMaxWidth()
             )
         }
-
         userFullName?.let {
             Text(it)
         }
-
         userEmail?.let {
             Text(it)
         }
-
         userId?.let {
             Text(it)
         }
@@ -422,7 +395,7 @@ private fun getGoogleSignInClient(context: Context): GoogleSignInClient {
 }
 
 
-fun signInWithOpenIdAuth(
+fun signInWithOpenIdAuthApp(
     authService: AuthorizationService,
     startForResult: ActivityResultLauncher<Intent>
 ) {
