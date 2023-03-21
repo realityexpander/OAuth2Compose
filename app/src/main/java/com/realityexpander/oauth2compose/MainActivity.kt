@@ -257,7 +257,7 @@ fun LoginOAuth2() {
                             )
 
                             // authorization completed
-                            Log.d("res", tokenResponse.accessToken ?: "Null Token")
+                            Log.d("res", tokenResponse.accessToken ?: "null")
                             addStatusMessage(
                                 "startForResult_OpenIdAppAuth authorization_completed " +
                                         "tokenResponse.accessToken:" +
