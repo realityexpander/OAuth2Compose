@@ -58,7 +58,10 @@ import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
 import net.openid.appauth.AuthorizationServiceConfiguration
+import net.openid.appauth.ClientSecretBasic
 import net.openid.appauth.ResponseTypeValues
+import net.openid.appauth.TokenRequest
+import net.openid.appauth.TokenResponse
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -102,8 +105,9 @@ fun LoginOAuth2() {
     val context = LocalContext.current
 
     val scope = rememberCoroutineScope()
-    var buttonLoginOpenIdAppAuthLabel by remember { mutableStateOf("Login") }
+    var buttonLoginGoogleOpenIdAppAuthLabel by remember { mutableStateOf("Login") }
     var buttonLoginGoogleSignInLabel by remember { mutableStateOf("Login") }
+    var buttonLoginGithubOpenIdAppAuthLabel by remember { mutableStateOf("Login") }
     var userImageUrl by remember { mutableStateOf<String?>(null) }
     var userFullName by remember { mutableStateOf<String?>(null) }
     var userEmail by remember { mutableStateOf<String?>(null) }
@@ -147,19 +151,68 @@ fun LoginOAuth2() {
         statusMessage = "$statusMessage\n➤$message"
     }
 
+    fun loadGithubProfile(accessToken: String, tokenResponse: TokenResponse? = null) {
+        scope.launch {
+            getGitHubProfileInfo(
+                accessToken,
+                onSuccess = { imageUrl, fullName, email, id ->
+                    updateUIForOpenIdAppAuth(
+                        imageUrl = imageUrl,
+                        fullName = fullName,
+                        email = email,
+                        id = id,
+                    )
+                },
+                onFailure = { exception ->
+                    addStatusMessage(
+                        exception.localizedMessage?.toString() ?: "null"
+                    )
+                }
+            )
+
+            // Save the results of this to Local Storage for re-launch
+
+
+            // authorization completed
+            Log.d("res", tokenResponse?.accessToken ?: "null")
+            addStatusMessage(
+                "startForResult_Github_OpenIdAppAuth authorization_completed " +
+                        "tokenResponse.accessToken:" +
+                        (tokenResponse?.accessToken?.take(20).toString())
+            )
+        }
+    }
+
     LaunchedEffect(key1 = true) {
         // Check if user is already logged in via OpenID AppAuth
         if (openIdAppAuthStateManager?.current?.isAuthorized == true) {
+
+            // Google will have additionClaimsMap after re-launch and currently logged-in
             val additionalClaimsMap =
                 openIdAppAuthStateManager.current.parsedIdToken?.additionalClaims
+            additionalClaimsMap?.let {
+                updateUIForOpenIdAppAuth(
+                    imageUrl = additionalClaimsMap?.get("picture") as String?,
+                    fullName = additionalClaimsMap?.get("name") as String?,
+                    email = additionalClaimsMap?.get("email") as String?,
+                    id = additionalClaimsMap?.get("id") as String? // note: id is missing when using AppAuth
+                )
+                buttonLoginGoogleOpenIdAppAuthLabel = "Logout"
+            }
 
-            buttonLoginOpenIdAppAuthLabel = "Logout"
-            updateUIForOpenIdAppAuth(
-                imageUrl = additionalClaimsMap?.get("picture") as String?,
-                fullName = additionalClaimsMap?.get("name") as String?,
-                email = additionalClaimsMap?.get("email") as String?,
-                id = additionalClaimsMap?.get("id") as String? // note: id is missing when using AppAuth
-            )
+            // Github will NOT have additionalClaimsMap, but we still have the accessToken, so perform load here.
+            // There is likely a better way to handle this, or it may just be handled on a case-by-case basis.
+            additionalClaimsMap ?: run {
+                val accessToken = openIdAppAuthStateManager.current.accessToken
+                accessToken?.let {
+                    loadGithubProfile(accessToken)
+                    buttonLoginGithubOpenIdAppAuthLabel = "Logout"
+                } ?: run {
+                    addStatusMessage("isAuthorized && accessToken is null")
+                }
+            }
+
+
         }
 
         // Check if user is already logged in via GoogleSignIn Client
@@ -200,8 +253,8 @@ fun LoginOAuth2() {
 
 
     //---------------
-    // OpenId AppAuth Client Sign in to Google
-    val startForResult_OpenIdAppAuth =
+    // Google OpenId AppAuth Client Sign in to Google
+    val startForResult_Google_OpenIdAppAuth =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
             if (result.resultCode == RESULT_OK) {
                 val response = AuthorizationResponse.fromIntent(result.data!!)
@@ -209,7 +262,7 @@ fun LoginOAuth2() {
 
                 response ?: run {
                     Log.d("response", "null")
-                    addStatusMessage("startForResult_OpenIdAppAuth response: ${exception?.message}")
+                    addStatusMessage("startForResult_OpenIdAppAuth exception: ${exception?.message}")
                     return@rememberLauncherForActivityResult
                 }
 
@@ -220,8 +273,8 @@ fun LoginOAuth2() {
                 ) { tokenResponse, authorizationException ->
 
                     tokenResponse ?: run {
-                        Log.d("resp", "null")
-                        addStatusMessage("startForResult_OpenIdAppAuth authorizationException.ex: " + authorizationException?.message)
+                        Log.d("tokenResponse", "null")
+                        addStatusMessage("startForResult_Google_OpenIdAppAuth authorizationException.ex: " + authorizationException?.message)
                         return@performTokenRequest
                     }
 
@@ -229,7 +282,7 @@ fun LoginOAuth2() {
                         tokenResponse,
                         authorizationException
                     )
-                    buttonLoginOpenIdAppAuthLabel = "Logout"
+                    buttonLoginGoogleOpenIdAppAuthLabel = "Logout"
 
                     Log.d("accessToken", tokenResponse.accessToken.toString())
                     addStatusMessage(
@@ -239,7 +292,7 @@ fun LoginOAuth2() {
 
                     tokenResponse.accessToken?.let { token ->
                         scope.launch {
-                            getProfileInfo(
+                            getGoogleProfileInfo(
                                 token,
                                 onSuccess = { imageUrl, fullName, email, id ->
                                     updateUIForOpenIdAppAuth(
@@ -259,7 +312,7 @@ fun LoginOAuth2() {
                             // authorization completed
                             Log.d("res", tokenResponse.accessToken ?: "null")
                             addStatusMessage(
-                                "startForResult_OpenIdAppAuth authorization_completed " +
+                                "startForResult_Google_OpenIdAppAuth authorization_completed " +
                                         "tokenResponse.accessToken:" +
                                         (tokenResponse.accessToken?.take(20).toString())
                             )
@@ -269,9 +322,64 @@ fun LoginOAuth2() {
             }
         }
 
+    val startForResult_Github_OpenIdAppAuth =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
+            if (result.resultCode == RESULT_OK) {
+                val response = AuthorizationResponse.fromIntent(result.data!!)
+                val exception = AuthorizationException.fromIntent(result.data)
+
+                exception?.run {
+                    Log.d("response", "null")
+                    addStatusMessage("startForResult_Github_OpenIdAppAuth exception: ${exception?.message}")
+                    return@rememberLauncherForActivityResult
+                }
+
+                val secret = ClientSecretBasic(BuildConfig.GITHUB_CLIENT_SECRET)
+                val tokenRequest = response?.createTokenExchangeRequest()
+
+                openIdAppAuthStateManager?.updateAfterAuthorization(response, exception)
+
+                openIdAppAuthService.performTokenRequest(
+                    tokenRequest!!,
+                    secret
+                ) { tokenResponse, authorizationException ->
+
+                    tokenResponse ?: run {
+                        Log.d("tokenResponse", "null")
+                        addStatusMessage("startForResult_Github_OpenIdAppAuth authorizationException.ex: " +
+                                authorizationException?.message)
+                        return@performTokenRequest
+                    }
+
+                    authorizationException?.run {
+                        Log.d("authorizationException", authorizationException.localizedMessage ?: "Unknown error")
+                        addStatusMessage("startForResult_Github_OpenIdAppAuth authorizationException.ex: " +
+                                authorizationException.message)
+                        return@performTokenRequest
+                    }
+
+                    openIdAppAuthStateManager?.updateAfterTokenResponse(
+                        tokenResponse,
+                        authorizationException
+                    )
+                    buttonLoginGithubOpenIdAppAuthLabel = "Logout"
+
+                    Log.d("accessToken", tokenResponse.accessToken.toString())
+                    addStatusMessage(
+                        "startForResult_Github_OpenIdAppAuth tokenResponse.accessToken:" +
+                                (tokenResponse.accessToken?.take(20).toString())
+                    )
+
+                    tokenResponse.accessToken?.let { accessToken ->
+                        loadGithubProfile(accessToken, tokenResponse)
+                    }
+                }
+            }
+        }
+
 
     //---------------
-    // Google Client Sign in to Google
+    // GoogleSignInClient Sign in to Google
     val startForResult_GoogleSignInAccount =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
             result.data?.let { data ->
@@ -305,7 +413,7 @@ fun LoginOAuth2() {
             .verticalScroll(rememberScrollState())
     ) {
 
-        // • Google Sign In
+        // • Google Sign In using GoogleSignInClient
         Button(
             onClick = {
                 if (buttonLoginGoogleSignInLabel == "Logout") {
@@ -323,29 +431,52 @@ fun LoginOAuth2() {
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text(text = "$buttonLoginGoogleSignInLabel with GoogleSignIn Client")
+            Text(text = "$buttonLoginGoogleSignInLabel to Google with GoogleSignInClient")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
 
-        // • OpenId AppAuth Sign In
+        // • Google OpenId AppAuth Sign In
         Button(
+            enabled = !buttonLoginGithubOpenIdAppAuthLabel.startsWith("Logout"),
             onClick = {
-                if (buttonLoginOpenIdAppAuthLabel == "Logout") {
+                if (buttonLoginGoogleOpenIdAppAuthLabel == "Logout") {
                     openIdAppAuthStateManager?.replace(AuthState()) // performs logout
                     updateUIForOpenIdAppAuth(null, null, null, null)
-                    buttonLoginOpenIdAppAuthLabel = "Login"
+                    buttonLoginGoogleOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
                     return@Button
                 } else {
-                    signInWithOpenIdAuthApp(openIdAppAuthService, startForResult_OpenIdAppAuth)
+                    signInGoogleWithOpenIdAuthApp(openIdAppAuthService, startForResult_Google_OpenIdAppAuth)
                 }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text(text = "$buttonLoginOpenIdAppAuthLabel with OpenId AppAuth Library")
+            Text(text = "$buttonLoginGoogleOpenIdAppAuthLabel to Google with OpenId AppAuth Library")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // • Github OpenId AppAuth Sign In
+        Button(
+            enabled = !buttonLoginGoogleOpenIdAppAuthLabel.startsWith("Logout"),
+            onClick = {
+                if (buttonLoginGithubOpenIdAppAuthLabel == "Logout") {
+                    openIdAppAuthStateManager?.replace(AuthState()) // performs logout
+                    updateUIForOpenIdAppAuth(null, null, null, null)
+                    buttonLoginGithubOpenIdAppAuthLabel = "Login"
+                    addStatusMessage("Logged out")
+                    return@Button
+                } else {
+                    signInGithubWithOpenIdAuthApp(openIdAppAuthService, startForResult_Github_OpenIdAppAuth)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text(text = "$buttonLoginGithubOpenIdAppAuthLabel to Github with OpenId AppAuth Library")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -397,7 +528,7 @@ private fun getGoogleSignInClient(context: Context): GoogleSignInClient {
 }
 
 
-fun signInWithOpenIdAuthApp(
+fun signInGoogleWithOpenIdAuthApp(
     authService: AuthorizationService,
     startForResult: ActivityResultLauncher<Intent>
 ) {
@@ -406,7 +537,7 @@ fun signInWithOpenIdAuthApp(
         Uri.parse("https://oauth2.googleapis.com/token")
     )
 
-    //GOOGLE_CLIENT_ID  // IMPORTANT! MUST BE `Android` Google Client ID
+    // GOOGLE_CLIENT_ID  // IMPORTANT! MUST BE `Android` Google Client ID
     val clientId = BuildConfig.GOOGLE_CLIENT_ID_ANDROID
     //val redirectUri = Uri.parse("com.realityexpander.oauth2compose:/ooogaboooga.oo") // note: name of resource doesn't matter, just the scheme.
     val redirectUri = //BuildConfig.APPLICATION_ID +":/oauth2callback"
@@ -424,7 +555,33 @@ fun signInWithOpenIdAuthApp(
     startForResult.launch(intent)
 }
 
-suspend fun getProfileInfo(
+fun signInGithubWithOpenIdAuthApp(
+    authService: AuthorizationService,
+    startForResult: ActivityResultLauncher<Intent>
+) {
+    val serviceConfig = AuthorizationServiceConfiguration(
+        Uri.parse("https://github.com/login/oauth/authorize"),
+        Uri.parse("https://github.com/login/oauth/access_token")
+    )
+
+    // GITHUB_CLIENT_SECRET
+    val clientId = BuildConfig.GITHUB_CLIENT_ID
+    val redirectUri =
+        Uri.parse("com.realityexpander.oauth2compose://oauth2callback") // NOTE: the double slashes here bc github doesn't allow single slashes...
+    val builder = AuthorizationRequest.Builder(
+        serviceConfig,
+        clientId,
+        ResponseTypeValues.CODE,
+        redirectUri
+    )
+    builder.setScopes("user repo")
+    val authRequest = builder.build()
+
+    val intent = authService.getAuthorizationRequestIntent(authRequest)
+    startForResult.launch(intent)
+}
+
+suspend fun getGoogleProfileInfo(
     accessToken: String,
     onSuccess: (
         imageUrl: String,
@@ -443,7 +600,7 @@ suspend fun getProfileInfo(
         try {
             val response = client.newCall(request).execute()
             val jsonBody: String = response.body!!.string()
-            Log.i("LOG_TAG", "User Info Response $jsonBody")
+            Log.i("LOG_TAG", "Google User Info Response $jsonBody")
 
             val userInfo = JSONObject(jsonBody)
             val fullName = userInfo.optString("name", null)
@@ -463,3 +620,80 @@ suspend fun getProfileInfo(
         }
     }
 }
+
+suspend fun getGitHubProfileInfo(
+    accessToken: String,
+    onSuccess: (
+        imageUrl: String,
+        fullName: String,
+        email: String,
+        id: String,
+    ) -> Unit,
+    onFailure: (exception: Exception) -> Unit = {}
+) {
+    withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("https://api.github.com/user")
+            .addHeader("Authorization", "token $accessToken")
+            .build()
+        try {
+            val response = client.newCall(request).execute()
+            val jsonBody: String = response.body!!.string()
+            Log.i("LOG_TAG", "GitHub User Info Response $jsonBody")
+
+            val userInfo = JSONObject(jsonBody)
+            val fullName = userInfo.optString("name", null)
+            val imageUrl = userInfo.optString("avatar_url", null)
+            val email = userInfo.optString("email", null)
+            val id = userInfo.optString("id", null)
+
+            // For some reason, the `id` is not retained for next app launch log-in using AppAuth
+            // Therefore, if using OpenId AppAuth, the `id` should the saved in App shared preferences.
+
+            onSuccess(imageUrl, fullName, email, id)
+        } catch (exception: Exception) {
+            Log.w("LOG_TAG", exception)
+            onFailure(exception)
+        }
+    }
+}
+
+data class GithubUserDto(
+    val id: Int,
+    val avatar_url: String,
+    val followers: Int,
+    val following: Int,
+    val login: String,
+    val owned_private_repos: Int,
+    val private_gists: Int,
+    val public_gists: Int,
+    val public_repos: Int,
+    val total_private_repos: Int,
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

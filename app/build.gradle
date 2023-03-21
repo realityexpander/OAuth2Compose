@@ -50,6 +50,8 @@ android {
         // Add BuildConfig fields
         buildConfigField "String", "GOOGLE_CLIENT_ID_ANDROID", "\"${localProperties['GOOGLE_CLIENT_ID_ANDROID']}\""
         buildConfigField "String", "GOOGLE_CLIENT_ID_WEB_APPLICATION", "\"${localProperties['GOOGLE_CLIENT_ID_WEB_APPLICATION']}\""
+        buildConfigField "String", "GITHUB_CLIENT_ID", "\"${localProperties['GITHUB_CLIENT_ID']}\""
+        buildConfigField "String", "GITHUB_CLIENT_SECRET", "\"${localProperties['GITHUB_CLIENT_SECRET']}\""
     }
 
     buildTypes {
