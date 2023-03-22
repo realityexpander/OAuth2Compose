@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -85,6 +86,8 @@ import org.json.JSONObject
 // https://developer.android.com/training/id-auth/authenticate?authuser=2
 // https://stackoverflow.com/questions/55666987/how-to-implement-oauth2-authorization-on-android
 // https://www.youtube.com/watch?v=2m6rbQk0OcE // for github
+// https://medium.com/androiddevelopers/authenticating-on-android-with-the-appauth-library-7bea226555d5
+// https://github.com/openid/AppAuth-Android
 
 class MainActivity : ComponentActivity() {
 
@@ -450,7 +453,6 @@ fun LoginOAuth2() {
                     updateUIForOpenIdAppAuth(null, null, null, null)
                     buttonLoginGoogleOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
-//                    return@Button
 
                     scope.launch {
                         signOutGoogleWithoutRedirect(
@@ -474,21 +476,20 @@ fun LoginOAuth2() {
             enabled = !buttonLoginGoogleOpenIdAppAuthLabel.startsWith("Logout"),
             onClick = {
                 if (buttonLoginGithubOpenIdAppAuthLabel == "Logout") {
-                    openIdAppAuthStateManager?.replace(AuthState()) // performs logout
+                    // Perform Logout
+                    openIdAppAuthStateManager?.replace(AuthState())
                     updateUIForOpenIdAppAuth(null, null, null, null)
                     buttonLoginGithubOpenIdAppAuthLabel = "Login"
                     addStatusMessage("Logged out")
-
-                    // Doesnt work yet
+                    //return@Button
+                } else {
+                    // Perform Login
                     scope.launch {
-                        signOutGithubWithoutRedirect(
-                            BuildConfig.GITHUB_CLIENT_ID,
-                            openIdAppAuthStateManager.current.accessToken ?: return@launch
+                        signInGithubWithOpenIdAuthApp(
+                            authService = openIdAppAuthService,
+                            startForResult = startForResult_Github_OpenIdAppAuth,
                         )
                     }
-                    return@Button
-                } else {
-                    signInGithubWithOpenIdAuthApp(openIdAppAuthService, startForResult_Github_OpenIdAppAuth)
                 }
             },
             modifier = Modifier
@@ -574,9 +575,10 @@ fun signInGoogleWithOpenIdAuthApp(
     startForResult.launch(intent)
 }
 
-fun signInGithubWithOpenIdAuthApp(
+suspend fun signInGithubWithOpenIdAuthApp(
     authService: AuthorizationService,
-    startForResult: ActivityResultLauncher<Intent>
+    startForResult: ActivityResultLauncher<Intent>,
+//    currentAccessToken: String? = null,
 ) {
     val serviceConfig = AuthorizationServiceConfiguration(
         /* authorizationEndpoint = */ Uri.parse("https://github.com/login/oauth/authorize"),
@@ -594,15 +596,18 @@ fun signInGithubWithOpenIdAuthApp(
         redirectUri
     )
     builder.setAdditionalParameters(mapOf("max_age" to "0"))
-    builder.setPrompt(AuthorizationRequest.Prompt.LOGIN +" "+
-            AuthorizationRequest.Prompt.CONSENT +" "+
-            AuthorizationRequest.Prompt.SELECT_ACCOUNT
+    builder.setScopes("user email repo")
+    builder.setPrompt(
+        AuthorizationRequest.Prompt.CONSENT + " " +
+                AuthorizationRequest.Prompt.LOGIN + " " +
+                AuthorizationRequest.Prompt.SELECT_ACCOUNT
     )
-    builder.setScopes("user repo")
     val authRequest = builder.build()
 
-    val intent = authService.getAuthorizationRequestIntent(authRequest)
-    startForResult.launch(intent)
+    withContext(Dispatchers.Main) {
+        val intent = authService.getAuthorizationRequestIntent(authRequest)
+        startForResult.launch(intent)
+    }
 }
 
 suspend fun getGoogleProfileInfo(
@@ -683,27 +688,27 @@ suspend fun getGitHubProfileInfo(
     }
 }
 
-const val URL_LOGOUT = "https://accounts.google.com/o/oauth2/revoke?token="
+const val URL_GOOGLE_LOGOUT = "https://accounts.google.com/o/oauth2/revoke?token="
 suspend fun signOutGoogleWithoutRedirect(authStateIdToken: String) {
     withContext(Dispatchers.IO) {
         val client = OkHttpClient()
         val request = Request.Builder()
-            .url(URL_LOGOUT + authStateIdToken)
+            .url(URL_GOOGLE_LOGOUT + authStateIdToken)
             .build()
 
         try {
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
-                println("response: ${response.body}, ${response.message}")
+                println("signOutGoogleWithoutRedirect response: ${response.body}, ${response.message}")
             } else {
-                println("response error: ${response}")
+                println("signOutGoogleWithoutRedirect response error: ${response}")
             }
         } catch (e: IOException) {
-            println("error: ${e.localizedMessage}")
+            println("signOutGoogleWithoutRedirect error: ${e.localizedMessage}")
         }
     }
 
-    // Note: Normal servers that have logout endpoints:
+    // Note: Most IDP servers that have logout endpoints:
     //    val serviceConfig = AuthorizationServiceConfiguration(
     //        Uri.parse("https://github.com/login/oauth/authorize"),
     //        Uri.parse("https://github.com/login/oauth/access_token")
@@ -717,29 +722,6 @@ suspend fun signOutGoogleWithoutRedirect(authStateIdToken: String) {
     //    val intent = openIdAppAuthService.getEndSessionRequestIntent(endSessionRequest)
     //    launchIntent(context, intent)
 }
-
-suspend fun signOutGithubWithoutRedirect(clientId: String, accessToken: String) {
-    withContext(Dispatchers.IO) {
-        val client = OkHttpClient()
-        val request = Request.Builder()
-            .url("https://api.github.com/applications/$clientId/tokens/$accessToken")
-            .addHeader("Authorization", "token $accessToken")
-            .addHeader("Accept", "application/vnd.github.v3+json")
-            .build()
-
-        try {
-            val response = client.newCall(request).execute()
-            if(response.isSuccessful) {
-                println("response: ${response.body}, ${response.message}")
-            } else {
-                println("response error: ${response}")
-            }
-        } catch (e: IOException) {
-            println("error: ${e.localizedMessage}")
-        }
-    }
-}
-
 
 
 
